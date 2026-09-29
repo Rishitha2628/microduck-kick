@@ -1,0 +1,36 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.python-version
+# uv.lock
+
+# Virtual environments
+.venv
+
+# Logs and databases
+wandb
+agents
+
+*.pch
+nohup.out
+*.onnx
+beyondmimic_motions/
+artifacts/
+*.npz
+
+src/mjlab_microduck/robot/microduck.bak/*
+src/mjlab_microduck/robot/microduck_test/*
+data/
+*.pt
+
+backup_onnx/
+
+logdir/
+
+# Training logs + exported policies are versioned; .pt checkpoints live in the GitHub Release
+!logs/**/*.onnx
+guarded_run/
