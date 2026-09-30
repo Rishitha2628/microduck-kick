@@ -35,9 +35,11 @@ never found the kick in the hour it ran.
 
 Full-length 1080p videos of each policy: [PPO](media/PPO.mp4), [FastSAC](media/FastSAC.mp4).
 
-For reference, Pollen's own released kick policy also stays up 100% of the time, so the task
-is solvable with PPO at a bigger budget; my smaller PPO run just locked into the collapse early.
-This is one seed per method, so treat it as an interesting first result, not a verdict.
+I then ran three seeds of each at an equal 300-iteration budget. PPO collapsed after the kick
+in **3 of 3** seeds. FastSAC kicked and stayed up in **2 of 3**; the third never found the kick
+and just stood there. So FastSAC does better here, but neither is reliable, and they fail in
+opposite ways. Pollen's own released kick policy stays up 100% of the time, so the task is
+solvable with PPO at a bigger budget.
 Details, numbers and caveats are in [docs/experiments.md](docs/experiments.md).
 
 ## Running it

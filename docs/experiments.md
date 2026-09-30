@@ -137,11 +137,40 @@ into kick-then-collapse at ~57° of tilt, which the 70° `fell_over` check doesn
 FastSAC didn't in this run. A lower fall threshold or a trunk-height termination would close
 that gap for every algorithm.
 
+## Three seeds each
+
+The single-seed result was the obvious weak spot, so I ran two more seeds (43, 44) of each
+method at a shorter, equal budget: 300 iterations (7,200 env steps per env), 1024 envs, same
+evaluation. Seed 42 is the original run, evaluated at its iteration-300 checkpoint.
+
+| run | peak ball speed | tilt at end | ends upright | outcome |
+|---|---:|---:|---:|---|
+| PPO seed 42 | 1.56 m/s | 47.4° | 0% | kicks, collapses |
+| PPO seed 43 | 1.47 m/s | 46.6° | 0% | kicks, collapses |
+| PPO seed 44 | 1.60 m/s | 39.8° | 0% | kicks, collapses |
+| FastSAC seed 42 | 1.42 m/s | 2.0° | 98.6% | kicks, stays up |
+| FastSAC seed 43 | 0.00 m/s | 0.8° | 100% | never kicks, just stands |
+| FastSAC seed 44 | 1.47 m/s | 2.7° | 98.4% | kicks, stays up |
+
+Counting a run as a success when it kicks (ball ≥ 1 m/s) *and* ends upright:
+**PPO 0/3, FastSAC 2/3.**
+
+- The PPO collapse is **systematic** at this budget: every seed finds kick-then-fall and none
+  gets out of it.
+- FastSAC is better but **not reliable**: when it finds the kick it keeps its balance, but one
+  seed in three never finds the kick at all and settles into standing still, the same trap
+  FastTD3 fell into.
+- So the two methods fail in opposite ways. PPO explores enough to find the kick but exploits
+  the loophole in the fall check; FastSAC respects the balance terms but sometimes doesn't
+  explore enough to find the kick.
+
+(PPO seed 43 was stopped at iteration 277 by the machine running low on RAM and resumed from its
+iteration-200 checkpoint, which restores the curriculum step counter too.)
+
 ## Caveats
 
-- **One seed per method.** That's the biggest one. Another PPO seed might not find the
-  loophole, another FastSAC seed might. (Pollen's official policy shows a clean PPO kick is
-  reachable, just not what my smaller run converged to.)
+- **Three seeds per method** is enough to show a pattern, not to put a confidence interval on
+  it. (Pollen's official policy shows a clean PPO kick is reachable at a bigger budget.)
 - **Unequal experience.** In the same wall-clock time FastSAC saw less than half of PPO's
   env steps (16.6k vs 36k per env). That also means it never trained through the full push
   stage (which starts at iteration 1000), yet it still ended upright in 93% of fully-pushed
@@ -156,11 +185,10 @@ that gap for every algorithm.
 
 ## What I'd do next
 
-1. Three seeds per method on the unchanged task, to see if PPO's collapse is systematic.
-2. A stricter variant of the task where a fall counts at ~40° of tilt, then train both again.
+1. A stricter variant of the task where a fall counts at ~40° of tilt, then train both again.
    That tells apart "FastSAC is a better learner here" from "FastSAC happened to dodge the
    loophole".
-3. FastTD3 with bigger / temporally correlated (pink or OU) exploration noise and a longer
+2. FastSAC / FastTD3 with bigger / temporally correlated (pink or OU) exploration noise and a longer
    random warm-up.
 
 ## Also in `logs/`
