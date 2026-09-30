@@ -167,6 +167,21 @@ Counting a run as a success when it kicks (ball ≥ 1 m/s) *and* ends upright:
 (PPO seed 43 was stopped at iteration 277 by the machine running low on RAM and resumed from its
 iteration-200 checkpoint, which restores the curriculum step counter too.)
 
+## Does a bigger batch fix PPO?
+
+Pollen's notes train tricks at 4096 envs, so the obvious objection is that 1024 is just too
+small. 4096 envs does not fit in 6 GB of GPU memory (it ran out at ~5.4 GB), so I tried 2048,
+same seed and 300 iterations:
+
+| PPO, 300 iters, seed 42 | peak ball speed | tilt at end | ends upright | time tilted > 30° |
+|---|---:|---:|---:|---:|
+| 1024 envs | 1.54 m/s | 47.4° | 0% | 93.7% |
+| 2048 envs | 1.41 m/s | 35.6° | 0% | 90.5% |
+
+Doubling the envs makes it lean back less, but it still ends every episode tilted and never
+stands back up. So "just use more envs" doesn't fix it at 2x; 4096 (and a much longer run)
+remain untested here.
+
 ## Caveats
 
 - **Three seeds per method** is enough to show a pattern, not to put a confidence interval on
