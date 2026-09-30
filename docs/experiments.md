@@ -101,10 +101,47 @@ Videos (1920x1080, 50 fps): [`media/PPO.mp4`](../media/PPO.mp4), [`media/FastSAC
 and the side-by-side [`media/side_by_side.mp4`](../media/side_by_side.mp4)
 (built with `scripts/make_media.py`).
 
+## How does this compare to Pollen's own kick?
+
+Pollen publishes the kick policy they run on the robot
+(`ball_kick_right.onnx` in [pollen-robotics/microduck-policies](https://huggingface.co/pollen-robotics/microduck-policies)).
+Same evaluation, no pushes, 512 episodes each, plus my PPO run at several points during
+training (checkpoints exported with `scripts/export.py`, now in
+`logs/rsl_rl/ball_kick_right/*/onnx_checkpoints/`):
+
+| policy | return | peak ball speed | tilt at end | ends upright |
+|---|---:|---:|---:|---:|
+| **Pollen official** | 95.6 | 1.34 m/s | 1.1° | **100%** |
+| PPO @ iter 100 | 64.8 | 1.71 m/s | 46.7° | 0% |
+| PPO @ iter 200 | 76.7 | 1.61 m/s | 44.3° | 0% |
+| PPO @ iter 300 | 77.6 | 1.54 m/s | 47.4° | 0% |
+| PPO @ iter 500 | 78.0 | 1.47 m/s | 49.9° | 0% |
+| PPO @ iter 700 | 78.7 | 1.47 m/s | 51.2° | 0% |
+| PPO @ iter 1000 | 80.1 | 1.45 m/s | 54.0° | 0% |
+| PPO @ iter 1499 | 80.7 | 1.47 m/s | 57.3° | 0% |
+| **FastSAC @ iter 694** | 95.0 | 1.40 m/s | 0.7° | **100%** |
+
+Three things stand out:
+
+- **The task itself is fine.** Pollen's policy kicks and stays up every time, so PPO *can*
+  solve it cleanly, at their training scale (their notes suggest ~4096 envs; I used 1024).
+- **My PPO run locked into the collapse from the start.** It already ends every episode on
+  its back at iteration 100 and never gets out. The return keeps creeping up while the
+  final lean gets worse (47° to 57°), which is exactly the kind of run where "reward going up"
+  is misleading.
+- **FastSAC lands where Pollen's policy is**: same 100% upright, similar return, a slightly
+  faster ball, after 694 iterations at 1024 envs on a laptop.
+
+So the fair summary is not "the task is broken" but: with a smaller budget, PPO can settle
+into kick-then-collapse at ~57° of tilt, which the 70° `fell_over` check doesn't catch, while
+FastSAC didn't in this run. A lower fall threshold or a trunk-height termination would close
+that gap for every algorithm.
+
 ## Caveats
 
 - **One seed per method.** That's the biggest one. Another PPO seed might not find the
-  loophole, another FastSAC seed might.
+  loophole, another FastSAC seed might. (Pollen's official policy shows a clean PPO kick is
+  reachable, just not what my smaller run converged to.)
 - **Unequal experience.** In the same wall-clock time FastSAC saw less than half of PPO's
   env steps (16.6k vs 36k per env). That also means it never trained through the full push
   stage (which starts at iteration 1000), yet it still ended upright in 93% of fully-pushed

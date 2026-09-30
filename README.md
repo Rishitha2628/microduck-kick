@@ -35,6 +35,8 @@ never found the kick in the hour it ran.
 
 Full-length 1080p videos of each policy: [PPO](media/PPO.mp4), [FastSAC](media/FastSAC.mp4).
 
+For reference, Pollen's own released kick policy also stays up 100% of the time, so the task
+is solvable with PPO at a bigger budget; my smaller PPO run just locked into the collapse early.
 This is one seed per method, so treat it as an interesting first result, not a verdict.
 Details, numbers and caveats are in [docs/experiments.md](docs/experiments.md).
 
