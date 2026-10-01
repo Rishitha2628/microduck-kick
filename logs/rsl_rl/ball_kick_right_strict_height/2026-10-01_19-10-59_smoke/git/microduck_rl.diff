@@ -1,0 +1,73 @@
+--- git commit ---
+51eec48c8ad2381c003e7c5285d6f84d5ffbd669
+
+
+--- git status ---
+On branch main
+Your branch is ahead of 'origin/main' by 1 commit.
+  (use "git push" to publish your local commits)
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   src/mjlab_microduck/tasks/__init__.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	logs/rsl_rl/ball_kick_right_strict_height/
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/src/mjlab_microduck/tasks/__init__.py b/src/mjlab_microduck/tasks/__init__.py
+index 3cd0e25..1cd761e 100644
+--- a/src/mjlab_microduck/tasks/__init__.py
++++ b/src/mjlab_microduck/tasks/__init__.py
+@@ -176,12 +176,12 @@ def _strict_ball_kick_env_cfg(play: bool = False, limit_deg: float = 40.0):
+     return cfg
+ 
+ 
+-def _strict_ball_kick_rl_cfg():
++def _strict_ball_kick_rl_cfg(suffix: str = "_strict"):
+     from copy import deepcopy
+ 
+     rl_cfg = deepcopy(MicroduckBallKickRlCfg)
+-    rl_cfg.experiment_name = rl_cfg.experiment_name + "_strict"
+-    rl_cfg.run_name = rl_cfg.run_name + "_strict"
++    rl_cfg.experiment_name = rl_cfg.experiment_name + suffix
++    rl_cfg.run_name = rl_cfg.run_name + suffix
+     return rl_cfg
+ 
+ 
+@@ -193,6 +193,30 @@ register_mjlab_task(
+     runner_cls=MicroduckOnPolicyRunner,
+ )
+ 
++
++# Strict + height: with only the 40° tilt check, PPO switches to sitting down after the kick
++# (trunk upright but at ~0.06 m). Add a trunk-height termination as well. Trunk height at spawn
++# is ~0.115 m and clean kicks never dip below ~0.099 m (5th pct), so 0.08 m (~70%) leaves margin.
++def _strict_height_ball_kick_env_cfg(play: bool = False, min_height: float = 0.08):
++    from mjlab.managers import TerminationTermCfg
++    from mjlab.tasks.velocity import mdp
++
++    cfg = _strict_ball_kick_env_cfg(play=play)
++    cfg.terminations["trunk_too_low"] = TerminationTermCfg(
++        func=mdp.root_height_below_minimum,
++        params={"minimum_height": min_height},
++    )
++    return cfg
++
++
++register_mjlab_task(
++    task_id="Mjlab-BallKick-Flat-StrictHeight-MicroDuck",
++    env_cfg=_strict_height_ball_kick_env_cfg(),
++    play_env_cfg=_strict_height_ball_kick_env_cfg(play=True),
++    rl_cfg=_strict_ball_kick_rl_cfg("_strict_height"),
++    runner_cls=MicroduckOnPolicyRunner,
++)
++
+ register_mjlab_task(
+     task_id="Mjlab-GroundPick-Rough-MicroDuck",
+     env_cfg=make_microduck_ground_pick_env_cfg(rough=True),

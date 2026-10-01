@@ -40,6 +40,13 @@ in **3 of 3** seeds. FastSAC kicked and stayed up in **2 of 3**; the third never
 and just stood there. So FastSAC does better here, but neither is reliable, and they fail in
 opposite ways. Pollen's own released kick policy stays up 100% of the time, so the task is
 solvable with PPO at a bigger budget.
+
+The fix turned out to be in the task, not the algorithm. A stricter 40° tilt check alone just
+made PPO sit down after the kick instead of falling back. Adding a trunk-height check as well
+(`Mjlab-BallKick-Flat-StrictHeight-MicroDuck`) closed both shortcuts: PPO then kicked at
+1.67 m/s and stayed on its feet in 99.8% of episodes, even at 1024 envs
+([video](media/PPO_tilt_height.mp4)).
+
 Details, numbers and caveats are in [docs/experiments.md](docs/experiments.md).
 
 ## Running it

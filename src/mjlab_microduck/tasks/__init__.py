@@ -176,12 +176,12 @@ def _strict_ball_kick_env_cfg(play: bool = False, limit_deg: float = 40.0):
     return cfg
 
 
-def _strict_ball_kick_rl_cfg():
+def _strict_ball_kick_rl_cfg(suffix: str = "_strict"):
     from copy import deepcopy
 
     rl_cfg = deepcopy(MicroduckBallKickRlCfg)
-    rl_cfg.experiment_name = rl_cfg.experiment_name + "_strict"
-    rl_cfg.run_name = rl_cfg.run_name + "_strict"
+    rl_cfg.experiment_name = rl_cfg.experiment_name + suffix
+    rl_cfg.run_name = rl_cfg.run_name + suffix
     return rl_cfg
 
 
@@ -190,6 +190,30 @@ register_mjlab_task(
     env_cfg=_strict_ball_kick_env_cfg(),
     play_env_cfg=_strict_ball_kick_env_cfg(play=True),
     rl_cfg=_strict_ball_kick_rl_cfg(),
+    runner_cls=MicroduckOnPolicyRunner,
+)
+
+
+# Strict + height: with only the 40° tilt check, PPO switches to sitting down after the kick
+# (trunk upright but at ~0.06 m). Add a trunk-height termination as well. Trunk height at spawn
+# is ~0.115 m and clean kicks never dip below ~0.099 m (5th pct), so 0.08 m (~70%) leaves margin.
+def _strict_height_ball_kick_env_cfg(play: bool = False, min_height: float = 0.08):
+    from mjlab.managers import TerminationTermCfg
+    from mjlab.tasks.velocity import mdp
+
+    cfg = _strict_ball_kick_env_cfg(play=play)
+    cfg.terminations["trunk_too_low"] = TerminationTermCfg(
+        func=mdp.root_height_below_minimum,
+        params={"minimum_height": min_height},
+    )
+    return cfg
+
+
+register_mjlab_task(
+    task_id="Mjlab-BallKick-Flat-StrictHeight-MicroDuck",
+    env_cfg=_strict_height_ball_kick_env_cfg(),
+    play_env_cfg=_strict_height_ball_kick_env_cfg(play=True),
+    rl_cfg=_strict_ball_kick_rl_cfg("_strict_height"),
     runner_cls=MicroduckOnPolicyRunner,
 )
 

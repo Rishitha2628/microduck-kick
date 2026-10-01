@@ -205,6 +205,31 @@ standing height. A tilt check can't see that. Video: [`media/PPO_strict.mp4`](..
 So a tilt threshold alone doesn't close the gap; a trunk-height termination (or making the
 kick reward depend on staying tall) would catch both the lean-back and the sit-down.
 
+## Closing both loopholes: tilt + height
+
+Measuring trunk height explained why neither check works alone. The trunk sits at 0.115 m at
+spawn; clean kicks never dip below 0.099 m (5th pct, Pollen and FastSAC), PPO's lean-back stays
+fairly *high* (ends at 0.100 m, 87%) and PPO's sit-down stays *upright* (3° tilt) but drops to
+0.06 m. So `Mjlab-BallKick-Flat-StrictHeight-MicroDuck` keeps the 40° tilt check and adds
+`root_height_below_minimum` at 0.08 m (~70% of standing).
+
+PPO, 1024 envs, seed 42, 300 iterations, evaluated on the original task:
+
+| PPO trained on | peak ball speed | tilt at end | height at end / standing | ends upright |
+|---|---:|---:|---:|---:|
+| original task (70° tilt) | 1.55 m/s | 47° | 0.92 | 0% |
+| 40° tilt only | 1.61 m/s | 3° | 0.53 | 0% |
+| **40° tilt + 0.08 m height** | **1.67 m/s** | **3°** | **0.98** | **99.8%** |
+| same, full pushes | 1.68 m/s | 3.4° | 0.98 | 99.6% |
+
+With both checks PPO learns a clean kick: the strongest of anything I trained (1.67 m/s vs 1.40
+for FastSAC and 1.34 for Pollen's released policy), it stays on its feet in 99.8% of episodes and
+holds up under full-strength pushes. It isn't as calm as FastSAC afterwards though: it keeps
+shuffling its feet and slowly turning in place instead of standing still.
+Video: [`media/PPO_tilt_height.mp4`](../media/PPO_tilt_height.mp4).
+
+So at this budget the problem was the task's termination conditions, not PPO.
+
 ## Caveats
 
 - **Three seeds per method** is enough to show a pattern, not to put a confidence interval on
@@ -223,8 +248,8 @@ kick reward depend on staying tall) would catch both the lean-back and the sit-d
 
 ## What I'd do next
 
-1. Add a trunk-height termination to the strict variant and train PPO again (the 40° tilt check
-   alone just turned the collapse into a sit-down).
+1. More seeds of PPO and FastSAC on the tilt + height variant, to see if FastSAC's edge disappears
+   once the loophole is closed.
 2. FastSAC / FastTD3 with bigger / temporally correlated (pink or OU) exploration noise and a longer
    random warm-up.
 
