@@ -1,0 +1,117 @@
+--- git commit ---
+ebfa88c77746add4f99c7202044a5b523e593758
+
+
+--- git status ---
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   scripts/eval_onnx.py
+	modified:   src/mjlab_microduck/tasks/__init__.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	logs/rsl_rl/ball_kick_right_strict/
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/scripts/eval_onnx.py b/scripts/eval_onnx.py
+index 28905bc..2396c8b 100644
+--- a/scripts/eval_onnx.py
++++ b/scripts/eval_onnx.py
+@@ -70,7 +70,7 @@ def main() -> None:
+     return torch.nan_to_num((vel_xy * _ball_kick_dir(env)).sum(dim=1), nan=0.0)
+ 
+   print(f"{'policy':<10}{'curric.':>8}{'eps':>5}{'return':>8}{'kick':>6}{'fell>70%':>9}{'ball m/s':>9}"
+-        f"{'end tilt':>9}{'end h/h0':>9}{'upright end %':>14}{'time >30deg %':>14}")
++        f"{'end tilt':>9}{'end h/h0':>9}{'upright end %':>14}{'time >30deg %':>14}{'max tilt p50/p95':>18}")
+   for label, path in (o.split("=", 1) for o in args.onnx):
+     sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+     in_name = sess.get_inputs()[0].name
+@@ -96,6 +96,8 @@ def main() -> None:
+       tilted_steps = torch.zeros(args.num_envs, device=obs.device)
+       ep_steps = torch.zeros(args.num_envs, device=obs.device)
+       end_tilt, end_hrel, tilted_frac = [], [], []
++      max_tilt = torch.zeros(args.num_envs, device=obs.device)  # peak lean within the episode
++      max_tilts = []
+       for _ in range(steps_per_episode * args.episodes_per_env):
+         obs_d, rew, term, trunc, extras = env.step(act(obs))
+         obs = obs_d["actor"]
+@@ -106,6 +108,7 @@ def main() -> None:
+         # Done envs are already reset, so their end-of-episode pose is last step's.
+         tilt, h = trunk_tilt_deg(), trunk_height()
+         tilted_steps += (torch.where(done, prev_tilt, tilt) > 30).float()
++        max_tilt = torch.maximum(max_tilt, torch.where(done, prev_tilt, tilt))
+         ep_steps += 1
+         d = done & (done_count < args.episodes_per_env)
+         if d.any():
+@@ -114,12 +117,14 @@ def main() -> None:
+           end_tilt += prev_tilt[d].tolist()
+           end_hrel += (prev_h[d] / h0[d]).tolist()
+           tilted_frac += (tilted_steps[d] / ep_steps[d]).tolist()
++          max_tilts += max_tilt[d].tolist()
+           fell += int((term & d).sum())
+           for k, v in extras.get("log", {}).items():
+             logs[k].append(float(v))
+         ret[term | trunc] = 0
+         peak[term | trunc] = 0
+         tilted_steps[done] = 0
++        max_tilt[done] = 0
+         ep_steps[done] = 0
+         h0 = torch.where(done, h, h0)  # new spawn height for reset envs
+         prev_tilt, prev_h = tilt, h
+@@ -131,7 +136,8 @@ def main() -> None:
+       upright_end = 100 * np.mean((et < 30) & (eh > 0.8))
+       print(f"{label:<10}{cstep:>8}{len(returns):>5}{np.mean(returns):>8.1f}{np.mean(kick):>6.1f}"
+             f"{100 * fell / max(len(returns), 1):>9.1f}{np.mean(peaks):>9.2f}{np.mean(et):>8.1f}\u00b0"
+-            f"{np.mean(eh):>9.2f}{upright_end:>14.1f}{100 * np.mean(tilted_frac):>14.1f}", flush=True)
++            f"{np.mean(eh):>9.2f}{upright_end:>14.1f}{100 * np.mean(tilted_frac):>14.1f}"
++            f"{np.percentile(max_tilts, 50):>11.1f}/{np.percentile(max_tilts, 95):.1f}\u00b0", flush=True)
+     if args.video_dir:
+       record(env, act, label, args, steps_per_episode)
+   env.close()
+diff --git a/src/mjlab_microduck/tasks/__init__.py b/src/mjlab_microduck/tasks/__init__.py
+index faa7366..3cd0e25 100644
+--- a/src/mjlab_microduck/tasks/__init__.py
++++ b/src/mjlab_microduck/tasks/__init__.py
+@@ -164,6 +164,35 @@ register_mjlab_task(
+     runner_cls=MicroduckOnPolicyRunner,
+ )
+ 
++
++# Strict BallKick: same task, but fell_over fires at 40° instead of 70°. At 1024-2048 envs
++# PPO converges to "kick, then lie back at ~40-57°", which the 70° limit never catches.
++# Clean kicks peak at ~10-21° (95th pct), so 40° leaves them a wide margin.
++def _strict_ball_kick_env_cfg(play: bool = False, limit_deg: float = 40.0):
++    import math
++
++    cfg = make_microduck_ball_kick_env_cfg(play=play)
++    cfg.terminations["fell_over"].params["limit_angle"] = math.radians(limit_deg)
++    return cfg
++
++
++def _strict_ball_kick_rl_cfg():
++    from copy import deepcopy
++
++    rl_cfg = deepcopy(MicroduckBallKickRlCfg)
++    rl_cfg.experiment_name = rl_cfg.experiment_name + "_strict"
++    rl_cfg.run_name = rl_cfg.run_name + "_strict"
++    return rl_cfg
++
++
++register_mjlab_task(
++    task_id="Mjlab-BallKick-Flat-Strict-MicroDuck",
++    env_cfg=_strict_ball_kick_env_cfg(),
++    play_env_cfg=_strict_ball_kick_env_cfg(play=True),
++    rl_cfg=_strict_ball_kick_rl_cfg(),
++    runner_cls=MicroduckOnPolicyRunner,
++)
++
+ register_mjlab_task(
+     task_id="Mjlab-GroundPick-Rough-MicroDuck",
+     env_cfg=make_microduck_ground_pick_env_cfg(rough=True),

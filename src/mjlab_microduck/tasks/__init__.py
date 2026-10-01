@@ -164,6 +164,35 @@ register_mjlab_task(
     runner_cls=MicroduckOnPolicyRunner,
 )
 
+
+# Strict BallKick: same task, but fell_over fires at 40° instead of 70°. At 1024-2048 envs
+# PPO converges to "kick, then lie back at ~40-57°", which the 70° limit never catches.
+# Clean kicks peak at ~10-21° (95th pct), so 40° leaves them a wide margin.
+def _strict_ball_kick_env_cfg(play: bool = False, limit_deg: float = 40.0):
+    import math
+
+    cfg = make_microduck_ball_kick_env_cfg(play=play)
+    cfg.terminations["fell_over"].params["limit_angle"] = math.radians(limit_deg)
+    return cfg
+
+
+def _strict_ball_kick_rl_cfg():
+    from copy import deepcopy
+
+    rl_cfg = deepcopy(MicroduckBallKickRlCfg)
+    rl_cfg.experiment_name = rl_cfg.experiment_name + "_strict"
+    rl_cfg.run_name = rl_cfg.run_name + "_strict"
+    return rl_cfg
+
+
+register_mjlab_task(
+    task_id="Mjlab-BallKick-Flat-Strict-MicroDuck",
+    env_cfg=_strict_ball_kick_env_cfg(),
+    play_env_cfg=_strict_ball_kick_env_cfg(play=True),
+    rl_cfg=_strict_ball_kick_rl_cfg(),
+    runner_cls=MicroduckOnPolicyRunner,
+)
+
 register_mjlab_task(
     task_id="Mjlab-GroundPick-Rough-MicroDuck",
     env_cfg=make_microduck_ground_pick_env_cfg(rough=True),

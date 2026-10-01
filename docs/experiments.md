@@ -182,6 +182,29 @@ Doubling the envs makes it lean back less, but it still ends every episode tilte
 stands back up. So "just use more envs" doesn't fix it at 2x; 4096 (and a much longer run)
 remain untested here.
 
+## Closing the loophole: a 40° fall check
+
+To test the obvious fix I added `Mjlab-BallKick-Flat-Strict-MicroDuck`
+(`src/mjlab_microduck/tasks/__init__.py`): the same task with `fell_over` at 40° instead of 70°.
+First I measured how far good kicks actually lean during the swing (95th percentile of the peak
+tilt per episode): Pollen's policy 13-14°, FastSAC 17-21°, PPO's collapse 59-60°. So 40° leaves
+clean kicks a 2x margin.
+
+PPO, 1024 envs, seed 42, 300 iterations, evaluated on the *original* task so the numbers are
+comparable:
+
+| PPO | peak ball speed | tilt at end | height at end / standing | peak tilt p95 |
+|---|---:|---:|---:|---:|
+| trained on original task | 1.55 m/s | 47.4° | 0.92 | 53.5° |
+| trained on strict task | 1.60 m/s | 3.0° | **0.53** | 18.1° |
+
+The lean-back collapse is gone, but PPO found the next shortcut: it kicks and then **sits down**,
+dropping onto its bottom with the legs splayed forward and the trunk upright, at about half its
+standing height. A tilt check can't see that. Video: [`media/PPO_strict.mp4`](../media/PPO_strict.mp4).
+
+So a tilt threshold alone doesn't close the gap; a trunk-height termination (or making the
+kick reward depend on staying tall) would catch both the lean-back and the sit-down.
+
 ## Caveats
 
 - **Three seeds per method** is enough to show a pattern, not to put a confidence interval on
@@ -200,9 +223,8 @@ remain untested here.
 
 ## What I'd do next
 
-1. A stricter variant of the task where a fall counts at ~40° of tilt, then train both again.
-   That tells apart "FastSAC is a better learner here" from "FastSAC happened to dodge the
-   loophole".
+1. Add a trunk-height termination to the strict variant and train PPO again (the 40° tilt check
+   alone just turned the collapse into a sit-down).
 2. FastSAC / FastTD3 with bigger / temporally correlated (pink or OU) exploration noise and a longer
    random warm-up.
 

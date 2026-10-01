@@ -70,7 +70,7 @@ def main() -> None:
     return torch.nan_to_num((vel_xy * _ball_kick_dir(env)).sum(dim=1), nan=0.0)
 
   print(f"{'policy':<10}{'curric.':>8}{'eps':>5}{'return':>8}{'kick':>6}{'fell>70%':>9}{'ball m/s':>9}"
-        f"{'end tilt':>9}{'end h/h0':>9}{'upright end %':>14}{'time >30deg %':>14}")
+        f"{'end tilt':>9}{'end h/h0':>9}{'upright end %':>14}{'time >30deg %':>14}{'max tilt p50/p95':>18}")
   for label, path in (o.split("=", 1) for o in args.onnx):
     sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
     in_name = sess.get_inputs()[0].name
@@ -96,6 +96,8 @@ def main() -> None:
       tilted_steps = torch.zeros(args.num_envs, device=obs.device)
       ep_steps = torch.zeros(args.num_envs, device=obs.device)
       end_tilt, end_hrel, tilted_frac = [], [], []
+      max_tilt = torch.zeros(args.num_envs, device=obs.device)  # peak lean within the episode
+      max_tilts = []
       for _ in range(steps_per_episode * args.episodes_per_env):
         obs_d, rew, term, trunc, extras = env.step(act(obs))
         obs = obs_d["actor"]
@@ -106,6 +108,7 @@ def main() -> None:
         # Done envs are already reset, so their end-of-episode pose is last step's.
         tilt, h = trunk_tilt_deg(), trunk_height()
         tilted_steps += (torch.where(done, prev_tilt, tilt) > 30).float()
+        max_tilt = torch.maximum(max_tilt, torch.where(done, prev_tilt, tilt))
         ep_steps += 1
         d = done & (done_count < args.episodes_per_env)
         if d.any():
@@ -114,12 +117,14 @@ def main() -> None:
           end_tilt += prev_tilt[d].tolist()
           end_hrel += (prev_h[d] / h0[d]).tolist()
           tilted_frac += (tilted_steps[d] / ep_steps[d]).tolist()
+          max_tilts += max_tilt[d].tolist()
           fell += int((term & d).sum())
           for k, v in extras.get("log", {}).items():
             logs[k].append(float(v))
         ret[term | trunc] = 0
         peak[term | trunc] = 0
         tilted_steps[done] = 0
+        max_tilt[done] = 0
         ep_steps[done] = 0
         h0 = torch.where(done, h, h0)  # new spawn height for reset envs
         prev_tilt, prev_h = tilt, h
@@ -131,7 +136,8 @@ def main() -> None:
       upright_end = 100 * np.mean((et < 30) & (eh > 0.8))
       print(f"{label:<10}{cstep:>8}{len(returns):>5}{np.mean(returns):>8.1f}{np.mean(kick):>6.1f}"
             f"{100 * fell / max(len(returns), 1):>9.1f}{np.mean(peaks):>9.2f}{np.mean(et):>8.1f}\u00b0"
-            f"{np.mean(eh):>9.2f}{upright_end:>14.1f}{100 * np.mean(tilted_frac):>14.1f}", flush=True)
+            f"{np.mean(eh):>9.2f}{upright_end:>14.1f}{100 * np.mean(tilted_frac):>14.1f}"
+            f"{np.percentile(max_tilts, 50):>11.1f}/{np.percentile(max_tilts, 95):.1f}\u00b0", flush=True)
     if args.video_dir:
       record(env, act, label, args, steps_per_episode)
   env.close()
